@@ -87,7 +87,7 @@ app.post('/perguntar', async (req, res) => {
         messages: buildMessages(memory, mensagem),
         stream: true,
         temperature: 0.7,
-        max_tokens: 512
+        max_tokens: 2048
       })
     });
 
