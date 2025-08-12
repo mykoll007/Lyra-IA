@@ -3,7 +3,7 @@
 A **Lyra** é uma assistente de inteligência artificial desenvolvida por **Mykoll**, criada para oferecer respostas **rápidas, claras e objetivas**.  
 Com **backend em Node.js**, **frontend responsivo** e **identidade própria**, a Lyra **aprende com cada interação**, graças a um sistema de memória que permite conversas mais naturais e personalizadas com o tempo.
 
-![Preview da Lyra](./screenshot.PNG)
+![Preview da Lyra](./screenshots/Lyra.png)
 ---
 
 ## 🚀 Funcionalidades
