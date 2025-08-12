@@ -3,6 +3,7 @@
 A **Lyra** é uma assistente de inteligência artificial desenvolvida por **Mykoll**, criada para oferecer respostas **rápidas, claras e objetivas**.  
 Com **backend em Node.js**, **frontend responsivo** e **identidade própria**, a Lyra **aprende com cada interação**, graças a um sistema de memória que permite conversas mais naturais e personalizadas com o tempo.
 
+![Preview da Lyra](./screenshot.PNG)
 ---
 
 ## 🚀 Funcionalidades
@@ -34,5 +35,5 @@ Com **backend em Node.js**, **frontend responsivo** e **identidade própria**, a
 
 ### 1. Clone o repositório
 ```bash
-git clone https://github.com/mykoll007/Lyra-ia.git
+git clone https://github.com/mykoll007/Lyra-IA.git
 cd lyra-ia
