@@ -37,3 +37,40 @@ Com **backend em Node.js**, **frontend responsivo** e **identidade própria**, a
 ```bash
 git clone https://github.com/mykoll007/Lyra-IA.git
 cd lyra-ia
+```
+
+### 2. Instale as dependências
+```bash
+npm install
+```
+
+### 3. Configure as variáveis de ambiente
+Crie um arquivo `.env` na raiz do projeto e adicione:
+```env
+GROQ_API_KEY=sua_chave_aqui
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+> 🔑 A chave da Groq pode ser obtida gratuitamente em: [https://console.groq.com](https://console.groq.com)
+
+### 4. Execute o servidor
+```bash
+node index.mjs
+```
+
+### 5. Acesse no navegador
+```
+http://localhost:3000
+```
+
+---
+
+## 📄 Licença
+Este projeto foi desenvolvido por **Mykoll** e está disponível para uso e estudo.  
+O modelo de linguagem utilizado é fornecido pela [Groq](https://groq.com) e está sujeito aos termos de uso da plataforma.
+
+---
+
+## 📬 Contato
+💼 [LinkedIn](https://linkedin.com/in/mykolldaniel)  
+📧 mykoll.daniel@gmail.com
+
