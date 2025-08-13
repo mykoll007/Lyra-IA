@@ -1,8 +1,12 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { mensagem } = req.body;
-  if (!mensagem?.trim()) return res.status(400).json({ erro: 'mensagem vazia' });
+  const { mensagem, messages } = req.body;
+
+  // Se não houver histórico e nem mensagem, retorna erro
+  if ((!mensagem || !mensagem.trim()) && (!messages || !messages.length)) {
+    return res.status(400).json({ erro: 'mensagem vazia' });
+  }
 
   try {
     res.writeHead(200, {
@@ -10,6 +14,20 @@ export default async function handler(req, res) {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive'
     });
+
+    // Se vier histórico (localStorage), usa ele
+    const conversation = messages && messages.length
+      ? messages
+      : [{ role: 'user', content: mensagem }];
+
+    // Sempre adiciona a instrução de sistema no início
+    const messagesToSend = [
+      {
+        role: 'system',
+        content: 'Você é Lyra, uma assistente de IA simpática, acolhedora e clara.'
+      },
+      ...conversation
+    ];
 
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: 'POST',
@@ -19,13 +37,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content: 'Você é Lyra, uma assistente de IA simpática, acolhedora e clara.'
-          },
-          { role: 'user', content: mensagem }
-        ],
+        messages: messagesToSend,
         stream: true
       })
     });

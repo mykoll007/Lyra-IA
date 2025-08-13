@@ -9,9 +9,6 @@
 </head>
 
 <body>
-  <!-- Fundo Vanta -->
-
-
   <div class="wrap">
     <h1>Lyra — IA</h1>
 
@@ -31,14 +28,12 @@
     <button id="limparMemoria">Limpar Memória</button>
   </div>
 
-
   <div id="align-resposta">
     <div id="resposta">Pronta para responder...</div>
   </div>
 
   <div id="loading">Gerando resposta…</div>
-
-    <div id="vanta-bg"></div>
+  <div id="vanta-bg"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r121/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.globe.min.js"></script>
@@ -56,6 +51,15 @@
       $loading.style.display = on ? 'flex' : 'none';
     }
 
+    // Funções para gerenciar memória no navegador (Vercel)
+    function getMemory() {
+      return JSON.parse(localStorage.getItem('lyra_memory') || '[]');
+    }
+
+    function saveMemory(memory) {
+      localStorage.setItem('lyra_memory', JSON.stringify(memory));
+    }
+
     $enviar.onclick = async () => {
       const pergunta = $msg.value.trim();
       if (!pergunta) return;
@@ -66,11 +70,20 @@
       $resposta.textContent = '';
       setLoading(true);
 
+      // pega histórico salvo no navegador
+      const memory = getMemory();
+      memory.push({ role: 'user', content: pergunta });
+      saveMemory(memory);
+
       try {
-        const r = await fetch('/api/perguntar', {
+        const r = await fetch('/perguntar', { // local
+          // No Vercel, troque por '/api/perguntar'
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mensagem: pergunta }),
+          body: JSON.stringify({
+            mensagem: pergunta,
+            messages: memory // manda o histórico pro backend híbrido
+          }),
           signal: controller.signal
         });
 
@@ -78,17 +91,16 @@
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let partial = '';
-
         let firstToken = true;
+        let fullAnswer = '';
 
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
           partial += decoder.decode(value, { stream: true });
 
-          // divide por linhas do NDJSON
           const lines = partial.split('\n');
-          partial = lines.pop() || ''; // mantém o pedaço incompleto
+          partial = lines.pop() || '';
 
           for (const line of lines) {
             if (!line.trim()) continue;
@@ -99,7 +111,8 @@
                   setLoading(false);
                   firstToken = false;
                 }
-                $resposta.textContent += obj.delta; // já exibe token
+                fullAnswer += obj.delta;
+                $resposta.textContent += obj.delta;
               }
               if (obj.error) {
                 $resposta.textContent = 'Erro: ' + obj.error;
@@ -109,6 +122,11 @@
             }
           }
         }
+
+        // salva resposta no histórico do navegador
+        memory.push({ role: 'assistant', content: fullAnswer || '(Sem resposta)' });
+        saveMemory(memory);
+
       } catch (err) {
         if (err.name !== 'AbortError') {
           $resposta.textContent = 'Erro: ' + err.message;
@@ -118,13 +136,12 @@
       }
     };
 
-    $limparMemoria.onclick = async () => {
-      await fetch('/api/memory', { method: 'DELETE' });
+    $limparMemoria.onclick = () => {
+      localStorage.removeItem('lyra_memory');
       $resposta.textContent = 'Memória apagada.';
     };
 
-
-    // Faz a primeira letra digitada ser maiúscula
+    // Faz a primeira letra ser maiúscula
     $msg.addEventListener('input', () => {
       if ($msg.value.length === 1) {
         $msg.value = $msg.value.toUpperCase();
@@ -132,5 +149,4 @@
     });
   </script>
 </body>
-
 </html>
