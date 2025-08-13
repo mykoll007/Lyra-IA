@@ -67,7 +67,7 @@
       setLoading(true);
 
       try {
-        const r = await fetch('/perguntar', {
+        const r = await fetch('/api/perguntar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mensagem: pergunta }),
@@ -119,7 +119,7 @@
     };
 
     $limparMemoria.onclick = async () => {
-      await fetch('/memory', { method: 'DELETE' });
+      await fetch('/api/memory', { method: 'DELETE' });
       $resposta.textContent = 'Memória apagada.';
     };
 
