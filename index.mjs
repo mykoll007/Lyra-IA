@@ -138,8 +138,8 @@ app.post('/perguntar', async (req, res) => {
       });
     }
 
-    // salva resposta no modo local
-    if (!messages) {
+    // sempre salva no modo local, mesmo se vier messages do front
+    if (fsAvailable) {
       memory.push({ role: 'assistant', content: full || '(Sem resposta)' });
       await saveMemory(memory);
     }
