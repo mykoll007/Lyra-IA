@@ -47,6 +47,9 @@
     const $limparMemoria = document.getElementById('limparMemoria');
     let controller = null;
 
+    // Detecta se está no Vercel ou local
+    const API_BASE = window.location.hostname.includes('vercel.app') ? '/api' : '';
+
     function setLoading(on) {
       $loading.style.display = on ? 'flex' : 'none';
     }
@@ -76,8 +79,7 @@
       saveMemory(memory);
 
       try {
-        const r = await fetch('/perguntar', { // local
-          // No Vercel, troque por '/api/perguntar'
+        const r = await fetch(`${API_BASE}/perguntar`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -136,8 +138,9 @@
       }
     };
 
-    $limparMemoria.onclick = () => {
+    $limparMemoria.onclick = async () => {
       localStorage.removeItem('lyra_memory');
+      await fetch(`${API_BASE}/memory`, { method: 'DELETE' });
       $resposta.textContent = 'Memória apagada.';
     };
 
