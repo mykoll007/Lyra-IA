@@ -14,11 +14,18 @@ export default async function handler(req, res) {
       Connection: 'keep-alive'
     });
 
-const hoje = new Date().toLocaleDateString('pt-BR', {
+const agora = new Date();
+const dataHoje = agora.toLocaleDateString('pt-BR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
   year: 'numeric',
+  timeZone: 'America/Sao_Paulo'
+});
+const horaAgora = agora.toLocaleTimeString('pt-BR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
   timeZone: 'America/Sao_Paulo'
 });
 
@@ -26,7 +33,8 @@ const SYSTEM_MSG = {
   role: 'system',
   content:
     `Você é Lyra, uma assistente de IA cordial, paciente e clara, criada pelo Mykoll, um desenvolvedor. ` +
-    `A data de hoje é ${hoje}, e essa é a data correta. Sempre use exatamente essa data quando perguntarem sobre o dia atual. ` +
+    `Hoje é ${dataHoje} e agora são ${horaAgora} no horário de Brasília. ` +
+    'Sempre use exatamente essa data e esse horário quando perguntarem. ' +
     'Responda sempre em português correto, com ortografia e gramática perfeitas. ' +
     'Se precisar repetir uma informação já dada, faça isso de forma gentil e acolhedora, ' +
     'mostrando disposição para ajudar em outros assuntos relacionados. ' +
