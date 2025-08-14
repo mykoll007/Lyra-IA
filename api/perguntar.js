@@ -18,7 +18,8 @@ const hoje = new Date().toLocaleDateString('pt-BR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
-  year: 'numeric'
+  year: 'numeric',
+  timeZone: 'America/Sao_Paulo'
 });
 
 const SYSTEM_MSG = {
