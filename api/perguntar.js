@@ -3,7 +3,6 @@ export default async function handler(req, res) {
 
   const { mensagem, messages } = req.body;
 
-  // Se não houver histórico e nem mensagem, retorna erro
   if ((!mensagem || !mensagem.trim()) && (!messages || !messages.length)) {
     return res.status(400).json({ erro: 'mensagem vazia' });
   }
@@ -15,23 +14,26 @@ export default async function handler(req, res) {
       Connection: 'keep-alive'
     });
 
-    // Se vier histórico (localStorage), usa ele
+    // Prompt do sistema ajustado
+    const SYSTEM_MSG = {
+      role: 'system',
+      content:
+        'Você é Lyra, uma assistente de IA cordial, paciente e clara, criada pelo Mykoll, um desenvolvedor. ' +
+        'Responda sempre em português correto, com ortografia e gramática perfeitas. ' +
+        'Se precisar repetir uma informação já dada, faça isso de forma gentil e acolhedora, ' +
+        'mostrando disposição para ajudar em outros assuntos relacionados. ' +
+        'Evite soar ríspida, impaciente ou dar respostas muito curtas. ' +
+        'Quando não souber a resposta, explique educadamente e sugira formas de encontrar a informação. ' +
+        'Não invente informações e não use gírias, mantendo sempre um tom amigável e prestativo.'
+    };
+
+    // Se vier histórico (localStorage), usa ele; senão cria um novo
     const conversation = messages && messages.length
       ? messages
       : [{ role: 'user', content: mensagem }];
 
-    // Sempre adiciona a instrução de sistema no início
-    const messagesToSend = [
-      {
-        role: 'system',
-        content:     'Você é Lyra, uma assistente de IA simpática, acolhedora e clara. ' +
-    'Responda sempre em português correto, revisando ortografia, gramática e coerência. ' +
-    'Suas respostas devem ser bem estruturadas e organizadas de forma lógica. ' +
-    'Mantenha um tom amigável e prestativo. ' +
-    'Quem te criou foi o Mykoll.'
-      },
-      ...conversation
-    ];
+    // Junta prompt + histórico
+    const messagesToSend = [SYSTEM_MSG, ...conversation];
 
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: 'POST',
@@ -42,34 +44,71 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
         messages: messagesToSend,
-        stream: true
+        stream: true,
+        temperature: 0.3,
+        max_tokens: 2048
       })
     });
 
+    if (!r.ok || !r.body) {
+      let errorDetail = '';
+      try {
+        errorDetail = await r.text();
+      } catch {
+        errorDetail = '(sem detalhes do corpo)';
+      }
+      throw new Error(`Falha ao gerar resposta: ${r.status} — Detalhes: ${errorDetail}`);
+    }
+
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const text = decoder.decode(value, { stream: true });
-      text.split("\n").forEach(line => {
-        if (line.startsWith("data: ")) {
-          const data = line.replace("data: ", "").trim();
-          if (data === "[DONE]") return;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let lines = buffer.split('\n');
+      buffer = lines.pop(); // guarda pedaço incompleto
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.replace('data: ', '').trim();
+          if (data === '[DONE]') continue;
           try {
             const json = JSON.parse(data);
             const delta = json.choices?.[0]?.delta?.content || '';
             if (delta) {
-              res.write(JSON.stringify({ delta }) + "\n");
+              res.write(JSON.stringify({ delta }) + '\n');
             }
-          } catch {}
+          } catch (err) {
+            console.error('Erro ao parsear JSON parcial:', err);
+          }
         }
-      });
+      }
     }
+
+    // processa o que restou no buffer
+    if (buffer.trim().startsWith('data: ')) {
+      try {
+        const data = buffer.replace('data: ', '').trim();
+        if (data !== '[DONE]') {
+          const json = JSON.parse(data);
+          const delta = json.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            res.write(JSON.stringify({ delta }) + '\n');
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao processar buffer final:', err);
+      }
+    }
+
     res.end();
   } catch (err) {
-    res.write(JSON.stringify({ error: err.message }) + "\n");
+    res.write(JSON.stringify({ error: err.message }) + '\n');
     res.end();
   }
 }

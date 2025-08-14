@@ -55,14 +55,17 @@ async function saveMemory(memory) {
   await fsp.writeFile(MEM_FILE, JSON.stringify(compact, null, 2), 'utf-8');
 }
 
+// Prompt do sistema com tom cordial e Mykoll
 const SYSTEM_MSG = {
   role: 'system',
   content:
-    'Você é Lyra, uma assistente de IA simpática, acolhedora e clara. ' +
-    'Responda sempre em português correto, revisando ortografia, gramática e coerência. ' +
-    'Suas respostas devem ser bem estruturadas e organizadas de forma lógica. ' +
-    'Mantenha um tom amigável e prestativo. ' +
-    'Quem te criou foi o Mykoll.'
+    'Você é Lyra, uma assistente de IA cordial, paciente e clara, criada pelo Mykoll, um desenvolvedor. ' +
+    'Responda sempre em português correto, com ortografia e gramática perfeitas. ' +
+    'Se precisar repetir uma informação já dada, faça isso de forma gentil e acolhedora, ' +
+    'mostrando disposição para ajudar em outros assuntos relacionados. ' +
+    'Evite soar ríspida, impaciente ou dar respostas muito curtas. ' +
+    'Quando não souber a resposta, explique educadamente e sugira formas de encontrar a informação. ' +
+    'Não invente informações e não use gírias, mantendo sempre um tom amigável e prestativo.'
 };
 
 function buildMessages(memory) {
@@ -74,10 +77,8 @@ app.post('/perguntar', async (req, res) => {
 
   let memory;
   if (messages && Array.isArray(messages)) {
-    // se o front enviou o histórico (modo localStorage/Vercel)
     memory = messages;
   } else {
-    // modo local com memória em arquivo
     memory = await loadMemory();
     memory.push({ role: 'user', content: mensagem });
     await saveMemory(memory);
@@ -98,7 +99,7 @@ app.post('/perguntar', async (req, res) => {
         model: GROQ_MODEL,
         messages: buildMessages(memory),
         stream: true,
-        temperature: 0.7,
+        temperature: 0.3,
         max_tokens: 2048
       })
     });
@@ -116,16 +117,21 @@ app.post('/perguntar', async (req, res) => {
     let full = '';
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      const text = decoder.decode(chunk.value, { stream: true });
+      const { value, done } = await reader.read();
+      if (done) break;
 
-      text.split('\n').forEach(line => {
+      buffer += decoder.decode(value, { stream: true });
+
+      let lines = buffer.split('\n');
+      buffer = lines.pop(); // guarda pedaço incompleto
+
+      for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.replace('data: ', '').trim();
-          if (data === '[DONE]') return;
+          if (data === '[DONE]') continue;
           try {
             const json = JSON.parse(data);
             const delta = json.choices?.[0]?.delta?.content || '';
@@ -133,12 +139,30 @@ app.post('/perguntar', async (req, res) => {
               full += delta;
               res.write(JSON.stringify({ delta }) + '\n');
             }
-          } catch {}
+          } catch (err) {
+            console.error('Erro ao parsear JSON parcial:', err);
+          }
         }
-      });
+      }
     }
 
-    // sempre salva no modo local, mesmo se vier messages do front
+    // processa o que restou no buffer
+    if (buffer.trim().startsWith('data: ')) {
+      try {
+        const data = buffer.replace('data: ', '').trim();
+        if (data !== '[DONE]') {
+          const json = JSON.parse(data);
+          const delta = json.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            full += delta;
+            res.write(JSON.stringify({ delta }) + '\n');
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao processar buffer final:', err);
+      }
+    }
+
     if (fsAvailable) {
       memory.push({ role: 'assistant', content: full || '(Sem resposta)' });
       await saveMemory(memory);
