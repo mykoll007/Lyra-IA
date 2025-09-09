@@ -26,12 +26,17 @@
     <textarea id="mensagem" placeholder="Digite sua pergunta..."></textarea><br>
     <button id="enviar">Enviar</button>
     <button id="limparMemoria">Limpar Memória</button>
+
+    <label>
+      <input type="checkbox" id="usarWeb">
+      Buscar na Web
+    </label>
   </div>
 
   <div id="align-resposta">
     <div id="resposta">Pronta para responder...</div>
+    <div id="fontes"></div>
   </div>
-
   <div id="loading">Gerando resposta…</div>
   <div id="vanta-bg"></div>
 
@@ -42,19 +47,18 @@
 
     const $msg = document.getElementById('mensagem');
     const $resposta = document.getElementById('resposta');
+    const $fontes = document.getElementById('fontes');
     const $loading = document.getElementById('loading');
     const $enviar = document.getElementById('enviar');
     const $limparMemoria = document.getElementById('limparMemoria');
     let controller = null;
 
-    // Detecta se está no Vercel ou local
     const API_BASE = window.location.hostname.includes('vercel.app') ? '/api' : '';
 
     function setLoading(on) {
       $loading.style.display = on ? 'flex' : 'none';
     }
 
-    // Funções para gerenciar memória no navegador (Vercel)
     function getMemory() {
       return JSON.parse(localStorage.getItem('lyra_memory') || '[]');
     }
@@ -64,16 +68,18 @@
     }
 
     $enviar.onclick = async () => {
-      const pergunta = $msg.value.trim();
-      if (!pergunta) return;
-
       if (controller) controller.abort();
       controller = new AbortController();
 
+      const pergunta = $msg.value.trim();
+      if (!pergunta) return;
+
+      const usarWeb = document.getElementById('usarWeb').checked;
+
       $resposta.textContent = '';
+      $fontes.innerHTML = '';
       setLoading(true);
 
-      // pega histórico salvo no navegador
       const memory = getMemory();
       memory.push({ role: 'user', content: pergunta });
       saveMemory(memory);
@@ -84,12 +90,15 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             mensagem: pergunta,
-            messages: memory // manda o histórico pro backend híbrido
+            messages: memory,
+            usarWeb: usarWeb,
+            maxDocs: 3
           }),
           signal: controller.signal
         });
 
         if (!r.body) throw new Error("Sem corpo de resposta");
+
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let partial = '';
@@ -108,6 +117,7 @@
             if (!line.trim()) continue;
             try {
               const obj = JSON.parse(line);
+
               if (obj.delta) {
                 if (firstToken) {
                   setLoading(false);
@@ -116,16 +126,32 @@
                 fullAnswer += obj.delta;
                 $resposta.textContent += obj.delta;
               }
+
               if (obj.error) {
                 $resposta.textContent = 'Erro: ' + obj.error;
               }
+
+              if (obj.fontes) {
+                $fontes.innerHTML = `
+    <h4>🌐 Fontes consultadas:</h4>
+    <ul>
+      ${obj.fontes.map(f => `
+        <li>
+          <a href="${f.url}" target="_blank"><strong>${f.title}</strong></a><br>
+          <small>${f.snippet || ''}</small>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+              }
+
+
             } catch (e) {
               console.error("Linha inválida do stream:", line);
             }
           }
         }
 
-        // salva resposta no histórico do navegador
         memory.push({ role: 'assistant', content: fullAnswer || '(Sem resposta)' });
         saveMemory(memory);
 
@@ -142,9 +168,9 @@
       localStorage.removeItem('lyra_memory');
       await fetch(`${API_BASE}/memory`, { method: 'DELETE' });
       $resposta.textContent = 'Memória apagada.';
+      $fontes.innerHTML = '';
     };
 
-    // Faz a primeira letra ser maiúscula
     $msg.addEventListener('input', () => {
       if ($msg.value.length === 1) {
         $msg.value = $msg.value.toUpperCase();
@@ -152,4 +178,5 @@
     });
   </script>
 </body>
+
 </html>

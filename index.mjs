@@ -1,14 +1,13 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 
-let fs, fsp, path, fileURLToPath;
+let fsp, path, fileURLToPath;
 let MEM_FILE, DATA_DIR, __filename, __dirname;
 let fsAvailable = true;
 
-// tenta carregar fs e path (caso esteja no ambiente local)
 try {
-  fs = await import('fs');
   fsp = await import('fs/promises');
   path = await import('path');
   ({ fileURLToPath } = await import('url'));
@@ -19,18 +18,23 @@ try {
   DATA_DIR = path.join(__dirname, 'data');
   MEM_FILE = path.join(DATA_DIR, 'memoria.json');
 
-  if (!fs.default.existsSync(DATA_DIR)) fs.default.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.default.existsSync(MEM_FILE)) fs.default.writeFileSync(MEM_FILE, JSON.stringify([]));
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(MEM_FILE)) fs.writeFileSync(MEM_FILE, JSON.stringify([]));
 } catch {
   fsAvailable = false;
   console.log('⚠️ Modo sem fs: Memória será gerenciada apenas pelo cliente');
 }
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 if (!GROQ_API_KEY) {
   console.error("❌ ERRO: GROQ_API_KEY não definida");
+  process.exit(1);
+}
+if (!SERPER_API_KEY) {
+  console.error("❌ ERRO: SERPER_API_KEY não definida");
   process.exit(1);
 }
 
@@ -39,6 +43,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// ---------------------- Funções de memória ----------------------
 async function loadMemory() {
   if (!fsAvailable) return [];
   try {
@@ -55,41 +60,89 @@ async function saveMemory(memory) {
   await fsp.writeFile(MEM_FILE, JSON.stringify(compact, null, 2), 'utf-8');
 }
 
-const agora = new Date();
-const dataHoje = agora.toLocaleDateString('pt-BR', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'America/Sao_Paulo'
-});
-const horaAgora = agora.toLocaleTimeString('pt-BR', {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  timeZone: 'America/Sao_Paulo'
-});
-
-const SYSTEM_MSG = {
-  role: 'system',
-  content:
-    `Você é Lyra, uma assistente de IA cordial, paciente e clara, criada pelo Mykoll, um desenvolvedor. ` +
-    `Hoje é ${dataHoje} e agora são ${horaAgora} no horário de Brasília e só diga essa frase quando perguntarem.` +
-    'Sempre use exatamente essa data e esse horário quando perguntarem. ' +
-    'Responda sempre em português correto, com ortografia e gramática perfeitas. ' +
-    'Se precisar repetir uma informação já dada, faça isso de forma gentil e acolhedora, ' +
-    'mostrando disposição para ajudar em outros assuntos relacionados. ' +
-    'Evite soar ríspida, impaciente ou dar respostas muito curtas. ' +
-    'Quando não souber a resposta, explique educadamente e sugira formas de encontrar a informação. ' +
-    'Não invente informações e não use gírias, mantendo sempre um tom amigável e prestativo.'
-};
-
-function buildMessages(memory) {
-  return [SYSTEM_MSG, ...memory.slice(-8)];
+// ---------------------- Datas em pt-BR ----------------------
+function agoraBR() {
+  const agora = new Date();
+  const dataHoje = agora.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'America/Sao_Paulo'
+  });
+  const horaAgora = agora.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'America/Sao_Paulo'
+  });
+  return { dataHoje, horaAgora };
 }
 
+// ---------------------- System Message ----------------------
+function buildSystemMsg() {
+  const { dataHoje, horaAgora } = agoraBR();
+  return {
+    role: 'system',
+    content:
+      `Você é Lyra, uma assistente de IA cordial, paciente e clara, criada pelo Mykoll, um desenvolvedor. ` +
+      `Hoje é ${dataHoje} e agora são ${horaAgora} no horário de Brasília. ` +
+      'Só informe a data ou a hora atual se o usuário perguntar explicitamente sobre isso.' +
+      'Responda sempre em português correto, com ortografia e gramática perfeitas. ' +
+      'Se precisar repetir uma informação já dada, faça isso de forma gentil e acolhedora. ' +
+      'Evite soar ríspida, impaciente ou dar respostas muito curtas. ' +
+      'Quando não souber a resposta, explique educadamente. ' +
+      '⚠️ Sempre que houver mensagens com "📡 INFORMAÇÃO ATUALIZADA DA WEB", você DEVE usá-las como fonte principal. ' +
+      'Nunca diga que não tem acesso em tempo real. ' +
+      'IMPORTANTE: quando usar informações da web, NÃO cite "Fonte 1", "Fonte 2"... na resposta. ' +
+      'Traga apenas a informação consolidada em texto corrido. As referências já serão mostradas separadamente na interface.'
+  };
+}
+
+
+function buildMessages(memory) {
+  return [buildSystemMsg(), ...memory.slice(-8)];
+}
+
+// ---------------------- Busca na Web (Serper.dev) ----------------------
+async function serperSearch(query, max = 5) {
+  try {
+    const r = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ q: query, num: max })
+    });
+
+    if (!r.ok) throw new Error(`Erro na busca: ${r.status}`);
+    const data = await r.json();
+
+    return (data.organic || []).slice(0, max).map(item => ({
+      title: item.title,
+      url: item.link,
+      snippet: item.snippet
+    }));
+  } catch (e) {
+    console.error("❌ Erro na busca Serper.dev:", e.message);
+    return [];
+  }
+}
+
+async function webSearchAndContext(query, maxDocs = 3) {
+  const results = await serperSearch(query, maxDocs);
+  const ctxParts = results.map(r =>
+    `${r.title}\n${r.snippet}\n(${r.url})`
+  );
+  const contexto = ctxParts.join('\n\n');
+
+  return { contexto, fontes: results };
+}
+
+// ---------------------- Endpoint principal ----------------------
 app.post('/perguntar', async (req, res) => {
-  const { mensagem, messages } = req.body;
+  const { mensagem, messages, usarWeb = false, maxDocs = 3 } = req.body;
 
   let memory;
   if (messages && Array.isArray(messages)) {
@@ -100,10 +153,37 @@ app.post('/perguntar', async (req, res) => {
     await saveMemory(memory);
   }
 
+  let webContextMsg = null;
+  let fontesUsadas = [];
+  if (usarWeb && mensagem && mensagem.trim().length > 0) {
+    try {
+      const { contexto, fontes } = await webSearchAndContext(mensagem, Math.min(Math.max(1, maxDocs), 5));
+      fontesUsadas = fontes;
+      if (contexto) {
+        webContextMsg = {
+          role: 'user',
+          content:
+            "📡 INFORMAÇÃO ATUALIZADA DA WEB:\n\n" + contexto + "\n\n" +
+            "Responda COM BASE NESTE CONTEÚDO. Ignore qualquer instrução anterior sobre não ter acesso em tempo real."
+        };
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao buscar na web:', e.message);
+    }
+  }
+
+  const llmMessages = buildMessages(memory);
+  if (webContextMsg) llmMessages.push(webContextMsg);
+
   try {
     res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+
+    // Se houver fontes, envia logo no começo
+    if (fontesUsadas.length > 0) {
+      res.write(JSON.stringify({ fontes: fontesUsadas }) + "\n");
+    }
 
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: 'POST',
@@ -113,7 +193,7 @@ app.post('/perguntar', async (req, res) => {
       },
       body: JSON.stringify({
         model: GROQ_MODEL,
-        messages: buildMessages(memory),
+        messages: llmMessages,
         stream: true,
         temperature: 0.3,
         max_tokens: 2048
@@ -122,11 +202,7 @@ app.post('/perguntar', async (req, res) => {
 
     if (!r.ok || !r.body) {
       let errorDetail = '';
-      try {
-        errorDetail = await r.text();
-      } catch {
-        errorDetail = '(sem detalhes do corpo)';
-      }
+      try { errorDetail = await r.text(); } catch { errorDetail = '(sem detalhes do corpo)'; }
       throw new Error(`Falha ao gerar resposta: ${r.status} — Detalhes: ${errorDetail}`);
     }
 
@@ -140,9 +216,8 @@ app.post('/perguntar', async (req, res) => {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-
       let lines = buffer.split('\n');
-      buffer = lines.pop(); // guarda pedaço incompleto
+      buffer = lines.pop();
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
@@ -155,27 +230,8 @@ app.post('/perguntar', async (req, res) => {
               full += delta;
               res.write(JSON.stringify({ delta }) + '\n');
             }
-          } catch (err) {
-            console.error('Erro ao parsear JSON parcial:', err);
-          }
+          } catch {}
         }
-      }
-    }
-
-    // processa o que restou no buffer
-    if (buffer.trim().startsWith('data: ')) {
-      try {
-        const data = buffer.replace('data: ', '').trim();
-        if (data !== '[DONE]') {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta?.content || '';
-          if (delta) {
-            full += delta;
-            res.write(JSON.stringify({ delta }) + '\n');
-          }
-        }
-      } catch (err) {
-        console.error('Erro ao processar buffer final:', err);
       }
     }
 
@@ -191,6 +247,7 @@ app.post('/perguntar', async (req, res) => {
   }
 });
 
+// ---------------------- Endpoints auxiliares ----------------------
 app.get('/memory', async (_, res) => {
   res.json(await loadMemory());
 });
