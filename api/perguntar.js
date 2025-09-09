@@ -120,8 +120,10 @@ export default async function handler(req, res) {
             role: 'user',
             content:
               "📡 INFORMAÇÃO ATUALIZADA DA WEB:\n\n" + contexto + "\n\n" +
-              "Responda COM BASE NESTE CONTEÚDO. Ignore qualquer instrução anterior sobre não ter acesso em tempo real."
+              "Com base SOMENTE nestas informações, responda de forma objetiva: quem é o técnico atual da Seleção Brasileira. " +
+              "Se houver dados conflitantes, considere apenas o mais recente. Responda uma única vez, sem repetições."
           };
+
         }
       } catch (e) {
         console.warn('⚠️ Falha ao buscar na web:', e.message);
