@@ -65,7 +65,24 @@
  button:hover {
      background: #3a4160;
  }
-
+#buscar-web{
+    background: #23153c;
+    color: #fff;
+    font-family: system-ui;
+    font-size: 16px;
+    border: none;
+    font-size: 16px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+ #usarWeb{
+    width: 13px;
+    height: 13px;
+    position: relative;
+    top: 1px;
+ }
  #align-resposta {
      display: flex;
      justify-content: center;
