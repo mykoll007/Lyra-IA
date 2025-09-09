@@ -164,8 +164,8 @@ app.post('/perguntar', async (req, res) => {
           role: 'user',
           content:
             "📡 INFORMAÇÃO ATUALIZADA DA WEB:\n\n" + contexto + "\n\n" +
-            "Com base SOMENTE nestas informações, responda de forma objetiva: quem é o técnico atual da Seleção Brasileira. " +
-            "Se houver dados conflitantes, considere apenas o mais recente. Responda uma única vez, sem repetições."
+            "Responda somente sobre o tema da pergunta atual, ignorando completamente o histórico da conversa. " +
+            "Não faça referência a respostas anteriores."
         };
 
       }
