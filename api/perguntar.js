@@ -119,7 +119,7 @@ export default async function handler(req, res) {
           webContextMsg = {
             role: 'user',
             content:
-              "📡 INFORMAÇÃO ATUALIZADA DA WEB:\n\n" + contexto + "\n\n" +
+              "\n\n" + contexto + "\n\n" +
               "Responda somente sobre o tema da pergunta atual, ignorando completamente o histórico da conversa. " +
               "Não faça referência a respostas anteriores."
           };
